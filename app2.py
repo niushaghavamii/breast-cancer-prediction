@@ -1,29 +1,23 @@
 """
 اپلیکیشن پیش‌بینی خوش‌خیم/بدخیم بودن تومور سرطان پستان
-مدل: PyCaret (ذخیره‌شده با joblib)  |  رابط کاربری: Streamlit  |  تفسیرپذیری: SHAP + Plotly
+مدل: sklearn pipeline  |  رابط کاربری: Streamlit  |  تفسیرپذیری: Permutation Importance + Plotly
 """
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import shap
 import plotly.graph_objects as go
 from sklearn.datasets import load_breast_cancer
+from sklearn.inspection import permutation_importance
 
-# =========================================================
-# تنظیمات کلی صفحه
-# =========================================================
 st.set_page_config(
-    page_title="سرطان سینه ",
+    page_title="سرطان سینه",
     page_icon="🩺",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# =========================================================
-# استایل سفارشی: فونت فارسی + راست‌به‌چپ + کارت‌های حرفه‌ای
-# =========================================================
 st.markdown("""
 <style>
 @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
@@ -40,127 +34,76 @@ div[data-testid="stMarkdownContainer"] { text-align: right; }
 .stSlider label { direction: rtl; text-align: right; display: block; }
 
 .main-title {
-    font-size: 2.3rem;
-    font-weight: 800;
-    color: #1e293b;
-    text-align: center;
-    margin-bottom: 0.1rem;
+    font-size: 2.3rem; font-weight: 800; color: #1e293b;
+    text-align: center; margin-bottom: 0.1rem;
 }
 .sub-title {
-    font-size: 1.05rem;
-    color: #64748b;
-    text-align: center;
-    margin-bottom: 1.8rem;
+    font-size: 1.05rem; color: #64748b;
+    text-align: center; margin-bottom: 1.8rem;
 }
-
 .info-card {
     background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 1.3rem 1.5rem;
-    text-align: center;
+    border: 1px solid #e2e8f0; border-radius: 16px;
+    padding: 1.3rem 1.5rem; text-align: center;
     box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .info-card h3 { margin: 0; font-size: 1.7rem; color: #1e293b; }
 .info-card p { margin: 0.3rem 0 0 0; color: #64748b; font-size: 0.9rem; }
-
 .result-card-benign {
     background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-    border: 2px solid #10b981;
-    border-radius: 18px;
-    padding: 2rem;
-    text-align: center;
-    box-shadow: 0 4px 14px rgba(16,185,129,0.15);
+    border: 2px solid #10b981; border-radius: 18px; padding: 2rem;
+    text-align: center; box-shadow: 0 4px 14px rgba(16,185,129,0.15);
 }
 .result-card-malignant {
     background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-    border: 2px solid #ef4444;
-    border-radius: 18px;
-    padding: 2rem;
-    text-align: center;
-    box-shadow: 0 4px 14px rgba(239,68,68,0.15);
+    border: 2px solid #ef4444; border-radius: 18px; padding: 2rem;
+    text-align: center; box-shadow: 0 4px 14px rgba(239,68,68,0.15);
 }
 .result-title { font-size: 1.9rem; font-weight: 800; margin: 0.3rem 0; }
 .result-sub { font-size: 1.05rem; color: #475569; margin: 0; }
-
 .section-header {
-    font-size: 1.35rem;
-    font-weight: 700;
-    color: #1e293b;
-    border-right: 5px solid #4f46e5;
-    padding-right: 0.7rem;
+    font-size: 1.35rem; font-weight: 700; color: #1e293b;
+    border-right: 5px solid #4f46e5; padding-right: 0.7rem;
     margin: 1.6rem 0 0.8rem 0;
 }
-
 div.stButton > button {
     width: 100%;
     background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
-    color: white;
-    font-weight: 700;
-    font-size: 1.05rem;
-    border-radius: 10px;
-    padding: 0.7rem;
-    border: none;
-    transition: 0.2s;
+    color: white; font-weight: 700; font-size: 1.05rem;
+    border-radius: 10px; padding: 0.7rem; border: none; transition: 0.2s;
 }
 div.stButton > button:hover {
     background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
     box-shadow: 0 4px 12px rgba(79,70,229,0.35);
 }
-
 .stExpander { direction: rtl; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-title">🩺 سامانه هوشمند پیش‌بینی سرطان سینه </div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">مبتنی بر دیتاست Wisconsin Breast Cancer و مدل یادگیری‌ماشین آموزش‌دیده با PyCaret</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">🩺 سامانه هوشمند پیش‌بینی سرطان سینه</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">مبتنی بر دیتاست Wisconsin Breast Cancer و مدل یادگیری‌ماشین</div>', unsafe_allow_html=True)
 
-
-# =========================================================
-# نگاشت نام ویژگی‌ها به فارسی
-# =========================================================
 FEATURE_FA = {
-    'mean radius': 'شعاع (میانگین)',
-    'mean texture': 'بافت (میانگین)',
-    'mean perimeter': 'محیط (میانگین)',
-    'mean area': 'مساحت (میانگین)',
-    'mean smoothness': 'صافی سطح (میانگین)',
-    'mean compactness': 'فشردگی (میانگین)',
-    'mean concavity': 'تقعر (میانگین)',
-    'mean concave points': 'نقاط مقعر (میانگین)',
-    'mean symmetry': 'تقارن (میانگین)',
-    'mean fractal dimension': 'بعد فراکتالی (میانگین)',
-    'radius error': 'خطای شعاع',
-    'texture error': 'خطای بافت',
-    'perimeter error': 'خطای محیط',
-    'area error': 'خطای مساحت',
-    'smoothness error': 'خطای صافی سطح',
-    'compactness error': 'خطای فشردگی',
-    'concavity error': 'خطای تقعر',
-    'concave points error': 'خطای نقاط مقعر',
-    'symmetry error': 'خطای تقارن',
-    'fractal dimension error': 'خطای بعد فراکتالی',
-    'worst radius': 'شعاع (بدترین حالت)',
-    'worst texture': 'بافت (بدترین حالت)',
-    'worst perimeter': 'محیط (بدترین حالت)',
-    'worst area': 'مساحت (بدترین حالت)',
-    'worst smoothness': 'صافی سطح (بدترین حالت)',
-    'worst compactness': 'فشردگی (بدترین حالت)',
-    'worst concavity': 'تقعر (بدترین حالت)',
-    'worst concave points': 'نقاط مقعر (بدترین حالت)',
-    'worst symmetry': 'تقارن (بدترین حالت)',
-    'worst fractal dimension': 'بعد فراکتالی (بدترین حالت)',
+    'mean radius': 'شعاع (میانگین)', 'mean texture': 'بافت (میانگین)',
+    'mean perimeter': 'محیط (میانگین)', 'mean area': 'مساحت (میانگین)',
+    'mean smoothness': 'صافی سطح (میانگین)', 'mean compactness': 'فشردگی (میانگین)',
+    'mean concavity': 'تقعر (میانگین)', 'mean concave points': 'نقاط مقعر (میانگین)',
+    'mean symmetry': 'تقارن (میانگین)', 'mean fractal dimension': 'بعد فراکتالی (میانگین)',
+    'radius error': 'خطای شعاع', 'texture error': 'خطای بافت',
+    'perimeter error': 'خطای محیط', 'area error': 'خطای مساحت',
+    'smoothness error': 'خطای صافی سطح', 'compactness error': 'خطای فشردگی',
+    'concavity error': 'خطای تقعر', 'concave points error': 'خطای نقاط مقعر',
+    'symmetry error': 'خطای تقارن', 'fractal dimension error': 'خطای بعد فراکتالی',
+    'worst radius': 'شعاع (بدترین حالت)', 'worst texture': 'بافت (بدترین حالت)',
+    'worst perimeter': 'محیط (بدترین حالت)', 'worst area': 'مساحت (بدترین حالت)',
+    'worst smoothness': 'صافی سطح (بدترین حالت)', 'worst compactness': 'فشردگی (بدترین حالت)',
+    'worst concavity': 'تقعر (بدترین حالت)', 'worst concave points': 'نقاط مقعر (بدترین حالت)',
+    'worst symmetry': 'تقارن (بدترین حالت)', 'worst fractal dimension': 'بعد فراکتالی (بدترین حالت)',
 }
 
-
-# =========================================================
-# بارگذاری مدل و داده‌ی مرجع
-# تغییر: اسم فایل از joblib_model_best.pkl به joblib.model_best
-# =========================================================
 @st.cache_resource
 def load_trained_model():
     return joblib.load('joblib.model_best')
-
 
 @st.cache_data
 def load_reference_data():
@@ -168,6 +111,12 @@ def load_reference_data():
     df = data.frame
     X = df.drop(columns=['target'])
     return X, df
+
+@st.cache_data
+def get_feature_importance(_model, X, y):
+    """محاسبه اهمیت ویژگی‌ها با permutation importance"""
+    result = permutation_importance(_model, X, y, n_repeats=10, random_state=42, n_jobs=-1)
+    return result.importances_mean
 
 try:
     model = load_trained_model()
@@ -177,15 +126,13 @@ except FileNotFoundError:
 
 X_ref, full_df = load_reference_data()
 feature_names = list(X_ref.columns)
+y_ref = full_df['target']
 
 if not model_loaded:
     st.error("فایل مدل 'joblib.model_best' پیدا نشد.")
     st.stop()
 
-
-# =========================================================
-# کارت‌های اطلاعاتی بالای صفحه (نمای کلی دیتاست)
-# =========================================================
+# کارت‌های اطلاعاتی
 c1, c2, c3, c4 = st.columns(4)
 benign_count = int((full_df['target'] == 1).sum())
 malignant_count = int((full_df['target'] == 0).sum())
@@ -201,10 +148,7 @@ with c4:
 
 st.write("")
 
-
-# =========================================================
-# سایدبار: ورودی ویژگی‌های تومور
-# =========================================================
+# سایدبار
 st.sidebar.markdown("## 📋 ویژگی‌های تومور بیمار")
 st.sidebar.caption("مقادیر را برای هر ویژگی تنظیم کنید")
 
@@ -222,35 +166,22 @@ def render_group(feature_list):
         step = (col_max - col_min) / 200 if col_max > col_min else 0.01
         input_values[feat] = st.slider(
             FEATURE_FA.get(feat, feat),
-            min_value=col_min,
-            max_value=col_max,
-            value=col_mean,
-            step=step,
-            key=feat
+            min_value=col_min, max_value=col_max,
+            value=col_mean, step=step, key=feat
         )
 
 with st.sidebar.expander("📏 ویژگی‌های میانگین (Mean)", expanded=True):
     render_group(mean_features)
-
 with st.sidebar.expander("📉 ویژگی‌های خطا (Standard Error)", expanded=False):
     render_group(error_features)
-
 with st.sidebar.expander("⚠️ ویژگی‌های بدترین حالت (Worst)", expanded=False):
     render_group(worst_features)
 
 st.sidebar.write("")
 predict_button = st.sidebar.button("🔍  اجرای پیش‌بینی")
 
-
-# =========================================================
-# ساخت DataFrame ورودی
-# =========================================================
 input_df = pd.DataFrame([input_values], columns=feature_names)
 
-
-# =========================================================
-# اجرای پیش‌بینی
-# =========================================================
 if predict_button:
     with st.spinner("در حال تحلیل داده‌ها..."):
         pred_proba = model.predict_proba(input_df)[0]
@@ -261,7 +192,6 @@ if predict_button:
     st.markdown('<div class="section-header">📊 نتیجه پیش‌بینی</div>', unsafe_allow_html=True)
 
     res_col1, res_col2 = st.columns([1, 1.3])
-
     with res_col1:
         box_class = "result-card-benign" if is_benign else "result-card-malignant"
         icon = "✅" if is_benign else "⚠️"
@@ -312,84 +242,70 @@ if predict_button:
     )
     st.plotly_chart(prob_fig, use_container_width=True)
 
-    # =====================================================
-    # تفسیرپذیری با SHAP
-    # =====================================================
-    st.markdown('<div class="section-header">🔬 تفسیر پیش‌بینی با SHAP</div>', unsafe_allow_html=True)
+    # تفسیرپذیری با Permutation Importance (جایگزین SHAP)
+    st.markdown('<div class="section-header">🔬 تفسیر پیش‌بینی - اهمیت ویژگی‌ها</div>', unsafe_allow_html=True)
     st.write(
-        "نمودارهای زیر نشان می‌دهند کدام ویژگی‌های تومور بیشترین تأثیر را در پیش‌بینی "
-        "**برای همین بیمار خاص** داشته‌اند. مقادیر مثبت (قرمز) پیش‌بینی را به سمت بدخیم بودن "
-        "و مقادیر منفی (آبی) به سمت خوش‌خیم بودن سوق می‌دهند."
+        "نمودار زیر نشان می‌دهد کدام ویژگی‌های تومور بیشترین تأثیر را در پیش‌بینی مدل داشته‌اند."
     )
 
-    with st.spinner("در حال محاسبه‌ی مقادیر SHAP..."):
-        background = shap.sample(X_ref, 50, random_state=123)
-        explainer = shap.Explainer(model.predict_proba, background)
-        shap_values = explainer(input_df)
-
-    class_index = 0
-    shap_vals = shap_values.values[0, :, class_index]
-    base_value = shap_values.base_values[0, class_index]
+    with st.spinner("در حال محاسبه اهمیت ویژگی‌ها..."):
+        importances = get_feature_importance(model, X_ref, y_ref)
 
     fa_labels = [FEATURE_FA.get(f, f) for f in feature_names]
-    order = np.argsort(np.abs(shap_vals))[::-1][:10]
+    order = np.argsort(importances)[::-1][:10]
 
     top_labels = [fa_labels[i] for i in order][::-1]
-    top_values = [shap_vals[i] for i in order][::-1]
-    top_colors = ["#ef4444" if v > 0 else "#3b82f6" for v in top_values]
+    top_values = [float(importances[i]) for i in order][::-1]
 
-    shap_bar_col, shap_water_col = st.columns(2)
+    # مقایسه مقدار ورودی با میانگین دیتاست
+    input_vs_mean = []
+    for i in order:
+        feat = feature_names[i]
+        diff = (input_values[feat] - float(X_ref[feat].mean())) / (float(X_ref[feat].std()) + 1e-8)
+        input_vs_mean.append(diff)
+    input_vs_mean = input_vs_mean[::-1]
 
-    with shap_bar_col:
-        bar_fig = go.Figure(go.Bar(
+    bar_colors = ["#ef4444" if v > 0 else "#3b82f6" for v in input_vs_mean]
+
+    imp_col, diff_col = st.columns(2)
+
+    with imp_col:
+        imp_fig = go.Figure(go.Bar(
             x=top_values,
             y=top_labels,
             orientation='h',
-            marker_color=top_colors,
-            text=[f"{v:+.3f}" for v in top_values],
+            marker_color="#4f46e5",
+            text=[f"{v:.3f}" for v in top_values],
             textposition="outside"
         ))
-        bar_fig.update_layout(
-            title="۱۰ ویژگی با بیشترین تأثیر (احتمال بدخیمی)",
-            xaxis_title="مقدار تأثیر SHAP",
+        imp_fig.update_layout(
+            title="۱۰ ویژگی مهم‌تر در مدل",
+            xaxis_title="اهمیت ویژگی",
             font=dict(family="Vazirmatn", size=13),
             height=460, margin=dict(l=10, r=10, t=50, b=30)
         )
-        st.plotly_chart(bar_fig, use_container_width=True)
+        st.plotly_chart(imp_fig, use_container_width=True)
 
-    with shap_water_col:
-        measures = ["absolute"] + ["relative"] * len(top_values) + ["total"]
-        waterfall_x = ["مقدار پایه"] + top_labels + ["پیش‌بینی نهایی"]
-        waterfall_y = [base_value] + top_values + [0]
-
-        water_fig = go.Figure(go.Waterfall(
-            orientation="v",
-            measure=measures,
-            x=waterfall_x,
-            y=waterfall_y,
-            increasing={"marker": {"color": "#ef4444"}},
-            decreasing={"marker": {"color": "#3b82f6"}},
-            totals={"marker": {"color": "#4f46e5"}},
-            connector={"line": {"color": "#cbd5e1"}}
+    with diff_col:
+        diff_fig = go.Figure(go.Bar(
+            x=input_vs_mean,
+            y=top_labels,
+            orientation='h',
+            marker_color=bar_colors,
+            text=[f"{v:+.2f}" for v in input_vs_mean],
+            textposition="outside"
         ))
-        water_fig.update_layout(
-            title="مسیر تأثیر ویژگی‌ها بر احتمال نهایی",
-            font=dict(family="Vazirmatn", size=12),
-            height=460, margin=dict(l=10, r=10, t=50, b=30),
-            xaxis_tickangle=-40
+        diff_fig.update_layout(
+            title="انحراف مقادیر بیمار از میانگین (Z-score)",
+            xaxis_title="انحراف از میانگین",
+            font=dict(family="Vazirmatn", size=13),
+            height=460, margin=dict(l=10, r=10, t=50, b=30)
         )
-        st.plotly_chart(water_fig, use_container_width=True)
+        st.plotly_chart(diff_fig, use_container_width=True)
 
-    top_idx = order[0]
-    top_name_fa = fa_labels[top_idx]
-    top_effect_val = shap_vals[top_idx]
-    effect_dir = "افزایش" if top_effect_val > 0 else "کاهش"
-    result_dir = "بدخیم" if not is_benign else "خوش‌خیم"
-
-    st.info(
-        f"🔑 **مهم‌ترین عامل در این پیش‌بینی:** ویژگی «**{top_name_fa}**» با مقدار واردشده "
-        f"باعث **{effect_dir}** احتمال **{result_dir}** بودن تومور شده است."
-    )
+    top_feat = feature_names[order[0]]
+    top_name_fa = fa_labels[order[0]]
+    st.info(f"🔑 **مهم‌ترین ویژگی در این مدل:** «**{top_name_fa}**» بیشترین تأثیر را در پیش‌بینی دارد.")
 
     with st.expander("📥 مشاهده‌ی جزئیات کامل مقادیر واردشده"):
         display_df = input_df.T.reset_index()
@@ -401,4 +317,5 @@ else:
     st.info("👈 ویژگی‌های تومور را از نوار کناری تنظیم کرده و روی دکمه «اجرای پیش‌بینی» کلیک کنید.")
 
 st.divider()
-st.caption("ساخته‌شده با Streamlit و SHAP — صرفاً جهت اهداف آموزشی و پژوهشی، جایگزین تشخیص پزشکی نیست.")
+st.caption("ساخته‌شده با Streamlit و scikit-learn — صرفاً جهت اهداف آموزشی و پژوهشی، جایگزین تشخیص پزشکی نیست.")
+        
