@@ -155,10 +155,11 @@ FEATURE_FA = {
 
 # =========================================================
 # بارگذاری مدل و داده‌ی مرجع
+# تغییر: اسم فایل از joblib_model_best.pkl به joblib.model_best
 # =========================================================
 @st.cache_resource
 def load_trained_model():
-    return joblib.load('joblib_model_best.pkl')
+    return joblib.load('joblib.model_best')
 
 
 @st.cache_data
@@ -178,7 +179,7 @@ X_ref, full_df = load_reference_data()
 feature_names = list(X_ref.columns)
 
 if not model_loaded:
-    st.error("⚠️ فایل مدل «joblib_model_best.pkl» پیدا نشد. آن را در همان پوشه‌ی app.py قرار دهید.")
+    st.error("فایل مدل 'joblib.model_best' پیدا نشد.")
     st.stop()
 
 
@@ -202,7 +203,7 @@ st.write("")
 
 
 # =========================================================
-# سایدبار: ورودی ویژگی‌های تومور (گروه‌بندی‌شده و فارسی)
+# سایدبار: ورودی ویژگی‌های تومور
 # =========================================================
 st.sidebar.markdown("## 📋 ویژگی‌های تومور بیمار")
 st.sidebar.caption("مقادیر را برای هر ویژگی تنظیم کنید")
@@ -294,7 +295,6 @@ if predict_button:
                                  font=dict(family="Vazirmatn"))
         st.plotly_chart(fig_gauge, use_container_width=True)
 
-    # --- نمودار احتمال هر کلاس ---
     prob_fig = go.Figure(go.Bar(
         x=[pred_proba[0] * 100, pred_proba[1] * 100],
         y=["بدخیم (Malignant)", "خوش‌خیم (Benign)"],
@@ -313,7 +313,7 @@ if predict_button:
     st.plotly_chart(prob_fig, use_container_width=True)
 
     # =====================================================
-    # تفسیرپذیری با SHAP (نمودارهای Plotly با برچسب فارسی)
+    # تفسیرپذیری با SHAP
     # =====================================================
     st.markdown('<div class="section-header">🔬 تفسیر پیش‌بینی با SHAP</div>', unsafe_allow_html=True)
     st.write(
@@ -327,13 +327,12 @@ if predict_button:
         explainer = shap.Explainer(model.predict_proba, background)
         shap_values = explainer(input_df)
 
-    # کلاس مرجع برای تفسیر: همیشه احتمال «بدخیم بودن» (index 0) را توضیح می‌دهیم
     class_index = 0
     shap_vals = shap_values.values[0, :, class_index]
     base_value = shap_values.base_values[0, class_index]
 
     fa_labels = [FEATURE_FA.get(f, f) for f in feature_names]
-    order = np.argsort(np.abs(shap_vals))[::-1][:10]  # ۱۰ ویژگی مهم‌تر
+    order = np.argsort(np.abs(shap_vals))[::-1][:10]
 
     top_labels = [fa_labels[i] for i in order][::-1]
     top_values = [shap_vals[i] for i in order][::-1]
@@ -381,7 +380,6 @@ if predict_button:
         )
         st.plotly_chart(water_fig, use_container_width=True)
 
-    # --- خلاصه‌ی متنی مهم‌ترین ویژگی ---
     top_idx = order[0]
     top_name_fa = fa_labels[top_idx]
     top_effect_val = shap_vals[top_idx]
@@ -403,4 +401,4 @@ else:
     st.info("👈 ویژگی‌های تومور را از نوار کناری تنظیم کرده و روی دکمه «اجرای پیش‌بینی» کلیک کنید.")
 
 st.divider()
-st.caption("ساخته‌شده با Streamlit، PyCaret و SHAP — صرفاً جهت اهداف آموزشی و پژوهشی، جایگزین تشخیص پزشکی نیست.")
+st.caption("ساخته‌شده با Streamlit و SHAP — صرفاً جهت اهداف آموزشی و پژوهشی، جایگزین تشخیص پزشکی نیست.")
