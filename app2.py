@@ -318,4 +318,3 @@ else:
 
 st.divider()
 st.caption("ساخته‌شده با Streamlit و scikit-learn — صرفاً جهت اهداف آموزشی و پژوهشی، جایگزین تشخیص پزشکی نیست.")
-        
